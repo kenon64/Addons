@@ -1,6 +1,7 @@
 """
 Dota 2 WebAPI Integration
-Получение реальных данных из OpenDota API и Stratz API
+Портирована логика из https://github.com/egger0a6/dota-web-api
+Получение реальных данных из официального Steam API
 """
 
 import requests
@@ -14,152 +15,203 @@ logger = logging.getLogger(__name__)
 
 
 class Dota2WebAPI:
-    """Интеграция с Dota 2 WebAPI через OpenDota и Stratz"""
+    """Полная интеграция с официальным Steam Dota 2 API"""
     
-    def __init__(self, steam_id: Optional[str] = None, api_key: Optional[str] = None):
+    # API Constants
+    APP_ID = 570
+    API_URL = "http://api.steampowered.com"
+    STATIC_CDN = "http://cdn.dota2.com/apps/dota2/images"
+    MATCH_INTERFACE = f"IDOTA2Match_{APP_ID}"
+    ECONOMY_INTERFACE = f"IEconDOTA2_{APP_ID}"
+    
+    def __init__(self, steam_api_key: str):
         """
         Args:
-            steam_id: Steam ID игрока (32-bit format)
-            api_key: Stratz API ключ (опционально)
+            steam_api_key: Steam API ключ с https://steamcommunity.com/dev/apikey
         """
-        self.steam_id = steam_id
-        self.api_key = api_key
+        self.api_key = steam_api_key
+        self.heroes = {}
+        self.items = {}
         
-        # API endpoints
-        self.opendota_base = "https://api.opendota.com/api"
-        self.stratz_base = "https://api.stratz.com/graphql"
-        
-        self.cache_time = 30  # Кэш на 30 секунд
-        self.last_fetch = 0
-        self.cached_data = None
+        # Загрузить статические данные
+        self._load_heroes()
+        self._load_items()
     
-    def get_player_live_game(self) -> Optional[Dict]:
-        """
-        Получить информацию о текущей игре игрока
-        Требует: Steam ID участника игры
-        """
-        if not self.steam_id:
-            logger.warning("Steam ID не установлен, не могу получить live game")
-            return None
-        
+    def get_match_details(self, match_id: int) -> Optional[Dict]:
+        """Получить полные детали матча по ID"""
         try:
-            url = f"{self.opendota_base}/players/{self.steam_id}/recentMatches"
-            response = requests.get(url, timeout=5)
+            params = {
+                'key': self.api_key,
+                'match_id': match_id
+            }
+            url = f"{self.API_URL}/{self.MATCH_INTERFACE}/GetMatchDetails/v1"
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             
-            matches = response.json()
-            if matches and len(matches) > 0:
-                match_id = matches[0]['match_id']
-                logger.info(f"✓ Найдена матча: {match_id}")
-                return self._parse_match_data(matches[0])
-            
+            data = response.json()
+            if data.get('result'):
+                logger.info(f"✓ Матча {match_id} загружена")
+                return data['result']
             return None
         except Exception as e:
-            logger.error(f"Ошибка получения live game: {e}")
+            logger.error(f"Ошибка получения матчи: {e}")
             return None
     
-    def get_live_matches(self, hero_id: Optional[int] = None) -> List[Dict]:
+    def get_match_history(self, account_id: int, hero_id: Optional[int] = None, 
+                         skill: Optional[int] = None, matches_requested: int = 20) -> Optional[List[Dict]]:
         """
-        Получить список текущих матчей
-        Может фильтровать по герою
+        Получить историю матчей игрока
+        
+        Args:
+            account_id: Account ID игрока (32-bit)
+            hero_id: (опционально) Фильтр по герою
+            skill: (опционально) Уровень - 0=Any, 1=Normal, 2=High, 3=VeryHigh
+            matches_requested: Кол-во матчей
         """
         try:
-            url = f"{self.opendota_base}/live"
-            response = requests.get(url, timeout=5)
+            params = {
+                'key': self.api_key,
+                'account_id': account_id,
+                'matches_requested': matches_requested
+            }
+            if hero_id:
+                params['hero_id'] = hero_id
+            if skill is not None:
+                params['skill'] = skill
+            
+            url = f"{self.API_URL}/{self.MATCH_INTERFACE}/GetMatchHistory/v1"
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             
-            matches = response.json()
-            logger.info(f"✓ Найдено live матчей: {len(matches)}")
+            data = response.json()
+            if data.get('result', {}).get('matches'):
+                logger.info(f"✓ История матчей {account_id} загружена ({len(data['result']['matches'])} матч)")
+                return data['result']['matches']
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка получения истории матчей: {e}")
+            return None
+    
+    def get_live_league_games(self) -> Optional[List[Dict]]:
+        """Получить текущие live матчи лиги"""
+        try:
+            params = {'key': self.api_key}
+            url = f"{self.API_URL}/{self.MATCH_INTERFACE}/GetLiveLeagueGames/v1"
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
             
-            if hero_id:
-                matches = [m for m in matches if self._hero_in_match(m, hero_id)]
-            
-            return matches[:10]  # Топ 10
+            data = response.json()
+            if data.get('result', {}).get('games'):
+                logger.info(f"✓ Загружено live матчей: {len(data['result']['games'])}")
+                return data['result']['games']
+            return None
         except Exception as e:
             logger.error(f"Ошибка получения live матчей: {e}")
-            return []
-    
-    def get_hero_stats(self, hero_id: int) -> Optional[Dict]:
-        """
-        Получить статистику героя
-        """
-        try:
-            url = f"{self.opendota_base}/heroStats"
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            
-            stats = response.json()
-            hero_stat = next((h for h in stats if h['id'] == hero_id), None)
-            
-            if hero_stat:
-                logger.info(f"✓ Статистика героя {hero_id} получена")
-                return hero_stat
-            
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики героя: {e}")
             return None
     
-    def get_hero_matchups(self, hero_id: int) -> Optional[Dict]:
-        """
-        Получить matchups героя (хорошие и плохие противники)
-        """
+    def get_team_info(self, start_team_id: Optional[int] = None, teams_requested: int = 20) -> Optional[List[Dict]]:
+        """Получить информацию о профессиональных командах"""
         try:
-            url = f"{self.opendota_base}/heroes/{hero_id}/matchups"
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            
-            matchups = response.json()
-            logger.info(f"✓ Matchups для героя {hero_id} получены")
-            
-            return {
-                "favorable": sorted(matchups, key=lambda x: x['wins'], reverse=True)[:5],
-                "unfavorable": sorted(matchups, key=lambda x: x['wins'])[:5]
+            params = {
+                'key': self.api_key,
+                'teams_requested': teams_requested
             }
-        except Exception as e:
-            logger.error(f"Ошибка получения matchups: {e}")
-            return None
-    
-    def get_meta_heroes(self, limit: int = 10) -> List[Dict]:
-        """
-        Получить топ героев текущего meta
-        """
-        try:
-            url = f"{self.opendota_base}/heroStats"
-            response = requests.get(url, timeout=5)
+            if start_team_id:
+                params['start_at_team_id'] = start_team_id
+            
+            url = f"{self.API_URL}/{self.MATCH_INTERFACE}/GetTeamInfoByTeamID/v1"
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             
-            stats = response.json()
-            # Сортировать по win rate
-            top_heroes = sorted(stats, key=lambda x: x.get('win', 0), reverse=True)[:limit]
-            
-            logger.info(f"✓ Получены топ {limit} героев meta")
-            return top_heroes
+            data = response.json()
+            if data.get('result', {}).get('teams'):
+                logger.info(f"✓ Информация о командах загружена")
+                return data['result']['teams']
+            return None
         except Exception as e:
-            logger.error(f"Ошибка получения meta: {e}")
-            return []
+            logger.error(f"Ошибка получения информации о командах: {e}")
+            return None
     
-    def _parse_match_data(self, match: Dict) -> Dict:
-        """Преобразовать данные матчи в нужный формат"""
-        return {
-            "match_id": match.get('match_id'),
-            "duration": match.get('duration', 0) // 60,  # В минуты
-            "game_mode": match.get('game_mode'),
-            "hero_id": match.get('hero_id'),
-            "result": "win" if match.get('player_slot', 256) < 128 == match.get('radiant_win') else "loss",
-            "kills": match.get('kills', 0),
-            "deaths": match.get('deaths', 0),
-            "assists": match.get('assists', 0),
-            "last_hits": match.get('last_hits', 0),
-            "gold": match.get('gold', 0),
-            "xp_per_min": match.get('xp_per_min', 0),
-            "gold_per_min": match.get('gold_per_min', 0),
-        }
+    def get_hero_stats(self) -> Dict:
+        """Получить статистику всех героев"""
+        if self.heroes:
+            return self.heroes
+        self._load_heroes()
+        return self.heroes
     
-    def _hero_in_match(self, match: Dict, hero_id: int) -> bool:
-        """Проверить если герой в матче"""
-        players = match.get('players', [])
-        return any(p.get('hero_id') == hero_id for p in players if p)
+    def get_items(self) -> Dict:
+        """Получить список всех предметов"""
+        if self.items:
+            return self.items
+        self._load_items()
+        return self.items
+    
+    def _load_heroes(self):
+        """Загрузить список героев"""
+        try:
+            params = {'key': self.api_key}
+            url = f"{self.API_URL}/{self.ECONOMY_INTERFACE}/GetHeroes/v1"
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('result', {}).get('heroes'):
+                for hero in data['result']['heroes']:
+                    name = hero.get('name', '').replace('npc_dota_hero_', '')
+                    hero['localized_name'] = name
+                    hero['images'] = {
+                        'sb': f"{self.STATIC_CDN}/heroes/{name}_sb.png",
+                        'lg': f"{self.STATIC_CDN}/heroes/{name}_lg.png",
+                        'full': f"{self.STATIC_CDN}/heroes/{name}_full.png",
+                    }
+                    self.heroes[name] = hero
+                logger.info(f"✓ Загружено героев: {len(self.heroes)}")
+        except Exception as e:
+            logger.warning(f"⚠️  Не удалось загрузить героев: {e}")
+    
+    def _load_items(self):
+        """Загрузить список предметов"""
+        try:
+            params = {'key': self.api_key}
+            url = f"{self.API_URL}/{self.ECONOMY_INTERFACE}/GetGameItems/v1"
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('result', {}).get('items'):
+                for item in data['result']['items']:
+                    name = item.get('name', '').replace('item_', '')
+                    item['localized_name'] = name
+                    item['images'] = {
+                        'lg': f"{self.STATIC_CDN}/items/{name}_lg.png",
+                    }
+                    self.items[name] = item
+                logger.info(f"✓ Загружено предметов: {len(self.items)}")
+        except Exception as e:
+            logger.warning(f"⚠️  Не удалось загрузить предметы: {e}")
+    
+    def player_summary(self, account_ids: List[int]) -> Dict[int, Dict]:
+        """
+        Получить краткую информацию об игроках из их профилей
+        Требует дополнительного использования ISteamUser API
+        """
+        try:
+            params = {
+                'key': self.api_key,
+                'steamids': ','.join(str(32 + aid) for aid in account_ids),  # Конвертировать в 64-bit
+            }
+            url = "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002"
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('response', {}).get('players'):
+                logger.info(f"✓ Информация о {len(data['response']['players'])} игроках загружена")
+                return {p.get('accountid'): p for p in data['response']['players']}
+            return {}
+        except Exception as e:
+            logger.warning(f"⚠️  Ошибка получения информации об игроках: {e}")
+            return {}
 
 
 class StratzAPI:
