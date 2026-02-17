@@ -119,7 +119,7 @@ if "!PYTHON_PATH!" neq "" (
         --hidden-import=dotenv ^
         main.py
 ) else (
-    pyinstaller --onefile ^
+    python -m PyInstaller --onefile ^
         --windowed ^
         --name "DotaCoach" ^
         --add-data ".env.example;." ^
