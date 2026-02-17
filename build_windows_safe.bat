@@ -26,8 +26,27 @@ if errorlevel 1 (
     REM Запустить скрипт для добавления Python в PATH
     if exist "fix_python_path.bat" (
         call fix_python_path.bat
+        REM После fix - проверяем еще раз
+        python --version >nul 2>&1
+        if errorlevel 1 (
+            echo.
+            echo ❌ Python все еще не найден! Перезагрузите компьютер и повторите.
+            pause
+            exit /b 1
+        )
+        echo.
+        echo ✅ Python теперь работает! Продолжаю сборку...
+        echo.
+        timeout /t 1 /nobreak
     ) else if exist "install_python.bat" (
         call install_python.bat
+        python --version >nul 2>&1
+        if errorlevel 1 (
+            echo.
+            echo ❌ Python не установлен! Перезагрузите и повторите.
+            pause
+            exit /b 1
+        )
     ) else (
         echo.
         echo Установи Python вручную:
@@ -35,8 +54,8 @@ if errorlevel 1 (
         echo   2. ✓ "Add Python to PATH"
         echo   3. Перезагрузи компьютер
         pause
+        exit /b 1
     )
-    exit /b 1
 )
 python --version
 echo ✓ Python найден в PATH
