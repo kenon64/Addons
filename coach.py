@@ -10,9 +10,11 @@ from datetime import datetime, timedelta
 
 from voice_assistant import VoiceAssistant
 from qwen_processor import QwenStrategist
+from local_strategist import LocalStrategist  # НОВОЕ: локальный анализатор
 from game_integration import GameAnalyzer
 from farming_optimizer import FarmingOptimizer
 from dota_advisor import DotaAdvisor, AdvisorType
+from config import QWEN_API_KEY
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +26,17 @@ logger = logging.getLogger(__name__)
 class DotaCoach:
     def __init__(self):
         self.voice_assistant = VoiceAssistant(language="ru_RU")  # Теперь безопасна
-        self.strategist = QwenStrategist()
+        
+        # НОВОЕ: выбрать анализатор в зависимости от API ключа
+        if QWEN_API_KEY:
+            self.strategist = QwenStrategist()
+            self.use_qwen = True
+            logger.info("✓ Используется Qwen AI (с API ключом)")
+        else:
+            self.strategist = LocalStrategist()
+            self.use_qwen = False
+            logger.info("✓ Используется локальный анализ (без API ключа)")
+        
         self.game_analyzer = GameAnalyzer()
         self.farming_optimizer = FarmingOptimizer()
         self.advisor = DotaAdvisor(position="top-right")  # Текстовой помощник
@@ -154,30 +166,65 @@ class DotaCoach:
     def _voice_report_recommendation(self, analysis: dict, game_state: dict):
         """Озвучить рекомендацию игроку (теперь через UI)"""
         try:
-            # Анализ текста рекомендации
-            recommendation_text = analysis.get('analysis', '')
+            # Получить рекомендации
+            recommendations = analysis.get('recommendations', [])
             
-            # Простое преобразование в более короткий формат для озвучивания
-            if "позиционирование" in recommendation_text.lower():
-                message = "Попробуй улучшить позицию на карте"
-                advice_type = AdvisorType.POSITIONING
-                priority = 6
-            elif "фарм" in recommendation_text.lower():
-                message = "Сосредоточься на фарме, набирай предметы"
-                advice_type = AdvisorType.FARMING
-                priority = 7
-            elif "безопасность" in recommendation_text.lower():
-                message = "Будь осторожнее, враги рядом"
-                advice_type = AdvisorType.DANGER
-                priority = 9
-            elif "боевых цели" in recommendation_text.lower() or "офис" in recommendation_text.lower():
-                message = "Помоги команде с основной целью"
-                advice_type = AdvisorType.OBJECTIVE
-                priority = 7
+            if not recommendations:
+                return
+            
+            # Взять первую (самую важную) рекомендацию
+            rec = recommendations[0]
+            
+            # Если используется LocalStrategist - структурированные рекомендации
+            if not self.use_qwen:
+                message = rec.get('advice', "Сосредоточься на игре")
+                title = rec.get('title', '💡')
+                
+                # Определить тип советника по категории
+                category = rec.get('category')
+                if category:
+                    category_str = str(category).lower()
+                    if 'позиционирование' in category_str:
+                        advice_type = AdvisorType.POSITIONING
+                    elif 'фарм' in category_str:
+                        advice_type = AdvisorType.FARMING
+                    elif 'безопасность' in category_str or 'safety' in category_str:
+                        advice_type = AdvisorType.DANGER
+                    elif 'боевые' in category_str or 'teamfight' in category_str:
+                        advice_type = AdvisorType.OBJECTIVE
+                    elif 'предметы' in category_str or 'items' in category_str:
+                        advice_type = AdvisorType.ITEM
+                    else:
+                        advice_type = AdvisorType.STRATEGY
+                else:
+                    advice_type = AdvisorType.STRATEGY
+                
+                priority = rec.get('priority', 5)
             else:
-                message = "Обрати внимание на изменение ситуации"
-                advice_type = AdvisorType.STRATEGY
-                priority = 5
+                # Если Qwen AI - текстовый анализ
+                recommendation_text = analysis.get('analysis', '')
+                
+                # Простое преобразование в более короткий формат для озвучивания
+                if "позиционирование" in recommendation_text.lower():
+                    message = "Попробуй улучшить позицию на карте"
+                    advice_type = AdvisorType.POSITIONING
+                    priority = 6
+                elif "фарм" in recommendation_text.lower():
+                    message = "Сосредоточься на фарме, набирай предметы"
+                    advice_type = AdvisorType.FARMING
+                    priority = 7
+                elif "безопасность" in recommendation_text.lower():
+                    message = "Будь осторожнее, враги рядом"
+                    advice_type = AdvisorType.DANGER
+                    priority = 9
+                elif "боевых цели" in recommendation_text.lower() or "офис" in recommendation_text.lower():
+                    message = "Помоги команде с основной целью"
+                    advice_type = AdvisorType.OBJECTIVE
+                    priority = 7
+                else:
+                    message = "Обрати внимание на изменение ситуации"
+                    advice_type = AdvisorType.STRATEGY
+                    priority = 5
             
             logger.info(f"💬 Рекомендация: {message}")
             

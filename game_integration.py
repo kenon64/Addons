@@ -7,6 +7,7 @@ import logging
 from typing import Optional, Dict, List
 from datetime import datetime
 import psutil
+import random  # НОВОЕ: случайные вариации
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class GameAnalyzer:
         self.is_game_active = False
         self.game_state_history = []
         self.last_update = None
+        self.game_time_offset = random.randint(10, 25)  # НОВОЕ: для вариативности
 
     def check_game_running(self) -> bool:
         """Проверить, запущена ли Dota 2"""
@@ -49,44 +51,61 @@ class GameAnalyzer:
         if not self.check_game_running():
             return None
 
-        # Примерное состояние игры (в реальности будет получаться из API/экрана)
+        # НОВОЕ: добавить вариативность
+        game_time = self.game_time_offset + len(self.game_state_history) // 6  # растет со временем
+        
+        # Случайные вариации параметров
+        hp_percent = random.randint(60, 100)
+        max_hp = 500
+        hp = int(max_hp * hp_percent / 100)
+        
+        gold = 2500 + (game_time * random.randint(150, 250))
+        gold += random.randint(-300, 300)  # Небольшой шум
+        
+        last_hits = 40 + (game_time * 3) + random.randint(-5, 5)
+        
+        # Случайно враги поблизости
+        nearby_enemy_count = random.randint(0, 2)
+        
+        # Примерное состояние игры (с вариациями!)
         game_state = {
-            "game_time": 15,  # Минуты
+            "game_time": game_time,  # Минуты - РАСТЕТ!
             "hero_name": "Anti-Mage",
             "hero_position": (420, 650),  # Позиция героя на миникарте
-            "level": 7,
-            "hp": 450,
-            "max_hp": 500,
-            "gold": 2500,
-            "items": ["Hand of Midas", "Power Treads"],
-            "last_hits": 45,
+            "level": min(30, 5 + game_time // 3),  # Уровень растет
+            "hp": hp,
+            "max_hp": max_hp,
+            "gold": gold,
+            "items": ["Hand of Midas", "Power Treads"] if game_time > 10 else ["Boots"],
+            "last_hits": last_hits,
             "denies": 3,
             "kills": 0,
             "deaths": 0,
             "assists": 2,
+            "nearby_enemy_count": nearby_enemy_count,  # НОВОЕ
             
             "allies": [
-                {"name": "Rubick", "level": 6, "position": "support", "hp_percent": 80},
-                {"name": "Templar Assassin", "level": 7, "position": "midlane", "hp_percent": 100},
-                {"name": "Tidehunter", "level": 6, "position": "offlane", "hp_percent": 70},
-                {"name": "Shadow Shaman", "level": 5, "position": "support", "hp_percent": 60},
+                {"name": "Rubick", "level": max(5, 4 + game_time // 3), "position": "support", "hp_percent": 80},
+                {"name": "Templar Assassin", "level": max(5, 5 + game_time // 3), "position": "midlane", "hp_percent": 100},
+                {"name": "Tidehunter", "level": max(5, 4 + game_time // 3), "position": "offlane", "hp_percent": 70},
+                {"name": "Shadow Shaman", "level": max(4, 3 + game_time // 3), "position": "support", "hp_percent": 60},
             ],
             
             "enemies": [
-                {"name": "Phantom Assassin", "level": 7, "position": "carry", "visible": False},
-                {"name": "Shadow Fiend", "level": 8, "position": "midlane", "visible": True},
-                {"name": "Dark Seer", "level": 6, "position": "offlane", "visible": True},
-                {"name": "Crystal Maiden", "level": 5, "position": "support", "visible": True},
-                {"name": "Earthshaker", "level": 6, "position": "support", "visible": False},
+                {"name": "Phantom Assassin", "level": max(6, 5 + game_time // 3), "position": "carry", "visible": random.choice([True, False])},
+                {"name": "Shadow Fiend", "level": max(7, 6 + game_time // 3), "position": "midlane", "visible": True},
+                {"name": "Dark Seer", "level": max(5, 4 + game_time // 3), "position": "offlane", "visible": random.choice([True, False])},
+                {"name": "Crystal Maiden", "level": max(4, 3 + game_time // 3), "position": "support", "visible": True},
+                {"name": "Earthshaker", "level": max(5, 4 + game_time // 3), "position": "support", "visible": random.choice([True, False])},
             ],
             
-            "team_gold": 12500,
-            "enemy_gold": 11800,
+            "team_gold": 12500 + (game_time * 800),
+            "enemy_gold": 11800 + (game_time * 750),
             "recent_events": [
-                "Ты получил First Blood",
-                "Anti-Mage получил 2 последних удара",
-                "Rubick использовал Telekinesis на Shadow Fiend",
-                "Твоя команда захватила Roshan Pit",
+                "Ты получил First Blood" if game_time < 5 else "Идет мирный фарм",
+                f"Anti-Mage получил {last_hits} последних удара",
+                "Rubick использовал Telekinesis на Shadow Fiend" if random.random() > 0.5 else "Ганк отбит!",
+                "Твоя команда контролирует карту" if random.random() > 0.5 else "Враги давят на линию",
             ],
             
             "timestamp": datetime.now().isoformat()
@@ -94,6 +113,8 @@ class GameAnalyzer:
         
         self.last_update = game_state
         self.game_state_history.append(game_state)
+        
+        logger.debug(f"Game State: Time={game_time}m, Gold={gold}, HP={hp_percent}%, Nearby enemies={nearby_enemy_count}")
         
         return game_state
 
