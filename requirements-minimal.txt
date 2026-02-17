@@ -1,0 +1,22 @@
+# МИНИМАЛЬНЫЕ ЗАВИСИМОСТИ - используй это если есть проблемы!
+# Minimal dependencies - use this if you have installation problems!
+
+# Voice Recognition & Synthesis
+SpeechRecognition==3.10.0
+pyttsx3==2.90
+
+# AI/ML - Qwen Integration
+requests==2.31.0
+
+# System Monitoring
+psutil==5.9.0
+
+# Configuration
+python-dotenv==1.0.0
+
+# Computer Vision & Visualization
+Pillow==10.0.0
+mss==9.0.1
+
+# Build & Distribution
+PyInstaller==6.1.0
