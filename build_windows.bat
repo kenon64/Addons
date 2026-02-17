@@ -1,7 +1,12 @@
 @echo off
 REM ============================================================
 REM Скрипт сборки DotaCoach.exe для Windows
+REM Улучшенная версия с поиском Python
 REM ============================================================
+
+setlocal enabledelayedexpansion
+set PYTHON_FOUND=0
+set PYTHON_PATH=
 
 echo.
 echo ====================================
@@ -9,20 +14,66 @@ echo   🎮 СБОРКА DotaCoach.exe
 echo ====================================
 echo.
 
-REM Проверка python
+REM Попытка 1: проверить python в PATH
+echo 🔍 Ищу Python в системе...
 python --version >nul 2>&1
-if errorlevel 1 (
-    echo ❌ Python не найден! Пожалуйста, установите Python.
+if errorlevel 0 (
+    set PYTHON_FOUND=1
+    echo ✓ Python найден в PATH
+    goto python_found
+)
+
+REM Попытка 2: поиск Python в стандартных местах
+for %%i in (
+    "C:\Python312\python.exe"
+    "C:\Python311\python.exe"
+    "C:\Python310\python.exe"
+    "C:\Python39\python.exe"
+    "C:\Program Files\Python312\python.exe"
+    "C:\Program Files\Python311\python.exe"
+    "C:\Program Files (x86)\Python\python.exe"
+) do (
+    if exist %%i (
+        set PYTHON_PATH=%%i
+        set PYTHON_FOUND=1
+        echo ✓ Python найден: !PYTHON_PATH!
+        goto python_found
+    )
+)
+
+REM Если Python не найден
+if !PYTHON_FOUND! equ 0 (
+    echo.
+    echo ❌ ОШИБКА: Python не найден в системе!
+    echo.
+    echo 📥 РЕШЕНИЕ:
+    echo 1. Открой https://www.python.org/downloads/
+    echo 2. Скачай Python 3.10 или выше
+    echo 3. ⭐ ВАЖНО! При установке отметь галочку:
+    echo    "Add Python to PATH"
+    echo 4. Перезагрузи компьютер
+    echo 5. Запусти этот скрипт снова
+    echo.
     pause
     exit /b 1
 )
 
-echo ✓ Python найден
-
+:python_found
 REM Установка зависимостей
 echo.
 echo 📦 Установка зависимостей...
-pip install -r requirements.txt
+if !PYTHON_FOUND! equ 1 (
+    if "!PYTHON_PATH!" neq "" (
+        !PYTHON_PATH! -m pip install --upgrade pip
+        !PYTHON_PATH! -m pip install -r requirements.txt
+    ) else (
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements.txt
+    )
+) else (
+    pip install -r requirements.txt
+)
+
 if errorlevel 1 (
     echo ❌ Ошибка при установке зависимостей
     pause
@@ -34,9 +85,9 @@ echo ✓ Зависимости установлены
 REM Проверка PyInstaller
 echo.
 echo 🔍 Проверка PyInstaller...
-pyinstaller --version >nul 2>&1
-if errorlevel 1 (
-    echo ⚠️  PyInstaller не установлен, устанавливаю...
+if "!PYTHON_PATH!" neq "" (
+    !PYTHON_PATH! -m pip install PyInstaller==6.1.0
+) else (
     pip install PyInstaller==6.1.0
 )
 
@@ -56,17 +107,29 @@ echo 🔨 Сборка exe файла...
 echo    (это может занять несколько минут)
 echo.
 
-pyinstaller --onefile ^
-    --windowed ^
-    --name "DotaCoach" ^
-    --icon=icon.ico ^
-    --add-data ".env.example;." ^
-    --hidden-import=speech_recognition ^
-    --hidden-import=pyttsx3 ^
-    --hidden-import=requests ^
-    --hidden-import=psutil ^
-    --hidden-import=dotenv ^
-    main.py
+if "!PYTHON_PATH!" neq "" (
+    !PYTHON_PATH! -m PyInstaller --onefile ^
+        --windowed ^
+        --name "DotaCoach" ^
+        --add-data ".env.example;." ^
+        --hidden-import=speech_recognition ^
+        --hidden-import=pyttsx3 ^
+        --hidden-import=requests ^
+        --hidden-import=psutil ^
+        --hidden-import=dotenv ^
+        main.py
+) else (
+    pyinstaller --onefile ^
+        --windowed ^
+        --name "DotaCoach" ^
+        --add-data ".env.example;." ^
+        --hidden-import=speech_recognition ^
+        --hidden-import=pyttsx3 ^
+        --hidden-import=requests ^
+        --hidden-import=psutil ^
+        --hidden-import=dotenv ^
+        main.py
+)
 
 if errorlevel 1 (
     echo.
