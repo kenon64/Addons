@@ -54,5 +54,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='icon.ico',  # Закомментировано - иконка будет добавлена позже
+    icon='icon.ico',  # Иконка для exe
 )
