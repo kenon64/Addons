@@ -19,9 +19,22 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo ❌ Python не найден!
     echo.
-    echo Установи Python с https://www.python.org/
-    echo ⭐ Не забудь отметить "Add Python to PATH"
-    pause
+    echo 🆘 РЕШЕНИЕ: Нужно установить Python
+    echo.
+    echo Сейчас откроется помощник для установки...
+    timeout /t 3 /nobreak
+    
+    REM Запустить скрипт установки Python
+    if exist "install_python.bat" (
+        call install_python.bat
+    ) else (
+        echo.
+        echo Установи Python вручную:
+        echo   1. https://www.python.org/downloads/
+        echo   2. ✓ "Add Python to PATH"
+        echo   3. Перезагрузи компьютер
+        pause
+    )
     exit /b 1
 )
 python --version
