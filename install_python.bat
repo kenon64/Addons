@@ -14,8 +14,12 @@ echo.
 
 REM Проверка если Python уже установлен
 python --version >nul 2>&1
-if errorlevel 0 (
-    echo тЬУ Python уже установлен!
+if errorlevel 1 (
+    echo.
+    echo ❌ Python НЕ найден в PATH
+    echo.
+) else (
+    echo ✓ Python уже установлен в PATH!
     python --version
     echo.
     pause

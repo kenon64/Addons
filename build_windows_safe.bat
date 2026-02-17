@@ -17,15 +17,16 @@ REM 1. Проверка Python
 echo 📋 1. Проверка Python...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python не найден!
+    echo ❌ Python не найден в PATH!
     echo.
-    echo 🆘 РЕШЕНИЕ: Нужно установить Python
+    echo 🆘 РЕШЕНИЕ: Запуск помощника...
     echo.
-    echo Сейчас откроется помощник для установки...
-    timeout /t 3 /nobreak
+    timeout /t 2 /nobreak
     
-    REM Запустить скрипт установки Python
-    if exist "install_python.bat" (
+    REM Запустить скрипт для добавления Python в PATH
+    if exist "fix_python_path.bat" (
+        call fix_python_path.bat
+    ) else if exist "install_python.bat" (
         call install_python.bat
     ) else (
         echo.
@@ -38,7 +39,7 @@ if errorlevel 1 (
     exit /b 1
 )
 python --version
-echo ✓ Python найден
+echo ✓ Python найден в PATH
 echo.
 
 REM 2. Обновление pip
