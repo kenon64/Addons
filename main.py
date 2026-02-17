@@ -4,6 +4,7 @@
 
 import logging
 import sys
+from setup_assistant import run_first_time_setup
 from coach import DotaCoach
 
 logging.basicConfig(
@@ -20,6 +21,13 @@ def main():
         logger.info("🎮 СТРАТЕГИЧЕСКИЙ ПОМОЩНИК DOTA 2")
         logger.info("Виртуальный тренер для анализа и рекомендаций")
         logger.info("=" * 60)
+        
+        # Запустить setup если первый запуск
+        is_first_run = run_first_time_setup()
+        if is_first_run:
+            logger.info("\n✅ Первоначальная настройка завершена!")
+            logger.info("Перезапустите приложение для загрузки конфигурации.\n")
+            return
         
         coach = DotaCoach()
         coach.run()

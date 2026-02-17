@@ -11,10 +11,11 @@ from datetime import datetime, timedelta
 from voice_assistant import VoiceAssistant
 from qwen_processor import QwenStrategist
 from local_strategist import LocalStrategist  # НОВОЕ: локальный анализатор
+from dota2_api import HybridGameAnalyzer  # НОВОЕ: гибридный анализатор
 from game_integration import GameAnalyzer
 from farming_optimizer import FarmingOptimizer
 from dota_advisor import DotaAdvisor, AdvisorType
-from config import QWEN_API_KEY
+from config import QWEN_API_KEY, DATA_SOURCE, STEAM_ID, USE_LIVE_GAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,17 +28,30 @@ class DotaCoach:
     def __init__(self):
         self.voice_assistant = VoiceAssistant(language="ru_RU")  # Теперь безопасна
         
-        # НОВОЕ: выбрать анализатор в зависимости от API ключа
+        # НОВОЕ: выбрать анализатор в зависимости от конфига
+        if DATA_SOURCE == 'api' or DATA_SOURCE == 'hybrid':
+            logger.info(f"📊 Режим: {DATA_SOURCE.upper()}")
+            if STEAM_ID:
+                self.game_analyzer = HybridGameAnalyzer(steam_id=STEAM_ID, use_live=USE_LIVE_GAME)
+                logger.info(f"✓ Используется API (Steam ID: {STEAM_ID})")
+            else:
+                logger.warning("Steam ID не установлен, использую локальную симуляцию")
+                self.game_analyzer = GameAnalyzer()
+        else:
+            logger.info("📊 Режим: LOCAL")
+            self.game_analyzer = GameAnalyzer()
+            logger.info("✓ Используется локальная симуляция")
+        
+        # Выбрать стратега в зависимости от API ключа
         if QWEN_API_KEY:
             self.strategist = QwenStrategist()
             self.use_qwen = True
-            logger.info("✓ Используется Qwen AI (с API ключом)")
+            logger.info("🤖 Используется Qwen AI (с API ключом)")
         else:
             self.strategist = LocalStrategist()
             self.use_qwen = False
-            logger.info("✓ Используется локальный анализ (без API ключа)")
+            logger.info("🧠 Используется локальный анализ (без API ключа)")
         
-        self.game_analyzer = GameAnalyzer()
         self.farming_optimizer = FarmingOptimizer()
         self.advisor = DotaAdvisor(position="top-right")  # Текстовой помощник
         self.is_running = False
